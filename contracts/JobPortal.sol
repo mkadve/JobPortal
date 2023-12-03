@@ -25,22 +25,17 @@ contract JobPortal {
         bool isFilled; // Indicates whether the job is already filled
     }
 
-    mapping(uint256 => Applicant) public applicants;
-    uint256 public applicantCount;
-
-    mapping(uint256 => Job) public jobs;
-    uint256 public jobCount;
+    Applicant[] public allApplicants;  // Array to store all applicants
+    Job[] public allJobs;  // Array to store all jobs
 
     mapping(address => mapping(uint256 => bool)) public jobApplications;
 
     modifier onlyAdmin() {
-        // Modifier to ensure that the caller is the admin
         require(msg.sender == admin, "Only admin can execute this");
         _;
     }
 
     modifier onlyAdminOrContract() {
-        // Modifier to ensure that the caller is either the admin or the contract itself
         require(msg.sender == admin || msg.sender == address(this), "Not authorized");
         _;
     }
@@ -56,105 +51,87 @@ contract JobPortal {
         admin = msg.sender;
     }
 
-    // Function to add a new applicant (only admin)
     function addApplicant(string memory _name, string memory _skills, string memory _phoneNumber, string memory _email, WorkPreference _workPreference) public onlyAdmin {
-        applicantCount++;
-        applicants[applicantCount] = Applicant(applicantCount, _name, _skills, _phoneNumber, _email, 0, _workPreference);
-        emit NewApplicant(applicantCount, _name, _skills, _phoneNumber, _email, _workPreference);
+        uint256 applicantId = allApplicants.length + 1;
+        allApplicants.push(Applicant(applicantId, _name, _skills, _phoneNumber, _email, 0, _workPreference));
+        emit NewApplicant(applicantId, _name, _skills, _phoneNumber, _email, _workPreference);
     }
 
-    // Function to add a new job (only admin)
     function addJob(string memory _title, string memory _description, uint256 _salary) public onlyAdmin {
-        jobCount++;
-        jobs[jobCount] = Job(jobCount, _title, _description, _salary, 0, false);
-        emit NewJob(jobCount, _title, _description, _salary);
+        uint256 jobId = allJobs.length + 1;
+        allJobs.push(Job(jobId, _title, _description, _salary, 0, false));
+        emit NewJob(jobId, _title, _description, _salary);
     }
 
-    // Function to apply for a job
-    function applyForJob(uint256 _jobId, uint256 _applicantId) public {
-        require(_jobId <= jobCount && _applicantId <= applicantCount, "Invalid job or applicant ID");
-        require(!jobs[_jobId].isFilled, "Job already filled");
+    function applyForJob(uint256 _jobId) public {
+        require(msg.sender != admin, "Admin cannot apply for a job");
+        require(_jobId <= allJobs.length, "Invalid job ID");
+        require(!allJobs[_jobId - 1].isFilled, "Job already filled");
         require(!jobApplications[msg.sender][_jobId], "Already applied for this job");
 
         jobApplications[msg.sender][_jobId] = true;
-        emit JobApplication(_jobId, _applicantId);
+
+        uint256 applicantId = allApplicants.length;
+        emit JobApplication(_jobId, applicantId);
     }
 
-    // Function to hire an applicant (only admin)
     function hireApplicant(uint256 _jobId, uint256 _applicantId) public onlyAdmin {
-        require(_jobId <= jobCount && _applicantId <= applicantCount, "Invalid job or applicant ID");
-        require(!jobs[_jobId].isFilled, "Job already filled");
+        require(_jobId <= allJobs.length && _applicantId <= allApplicants.length, "Invalid job or applicant ID");
+        require(!allJobs[_jobId - 1].isFilled, "Job already filled");
 
-        jobs[_jobId].applicantId = _applicantId;
-        jobs[_jobId].isFilled = true;
+        allJobs[_jobId - 1].applicantId = _applicantId;
+        allJobs[_jobId - 1].isFilled = true;
 
-        applicants[_applicantId].rating++;
+        allApplicants[_applicantId - 1].rating++;
         emit JobHired(_jobId, _applicantId);
     }
 
-    // Function to provide a rating to an applicant (only admin)
     function provideRating(uint256 _applicantId, uint256 _rating) public onlyAdmin {
-        require(_applicantId <= applicantCount, "Invalid applicant ID");
+        require(_applicantId <= allApplicants.length, "Invalid applicant ID");
         require(_rating >= 0 && _rating <= 5, "Rating must be between 0 and 5");
 
-        applicants[_applicantId].rating += _rating;
+        allApplicants[_applicantId - 1].rating += _rating;
         emit RatingGiven(_applicantId, _rating);
     }
 
-    // Function to update work preference (admin or the contract itself)
     function updateWorkPreference(uint256 _applicantId, WorkPreference _workPreference) public onlyAdminOrContract {
-        require(_applicantId <= applicantCount, "Invalid applicant ID");
+        require(_applicantId <= allApplicants.length, "Invalid applicant ID");
 
-        // Update the work preference
-        applicants[_applicantId].workPreference = _workPreference;
+        allApplicants[_applicantId - 1].workPreference = _workPreference;
         emit WorkPreferenceUpdated(_applicantId, _workPreference);
     }
 
-    // Function to get details of an applicant
     function getApplicantDetails(uint256 _applicantId) public view returns (uint256, string memory, string memory, string memory, string memory, uint256, WorkPreference) {
-        require(_applicantId <= applicantCount, "Invalid applicant ID");
+        require(_applicantId <= allApplicants.length, "Invalid applicant ID");
 
-        Applicant memory applicant = applicants[_applicantId];
+        Applicant memory applicant = allApplicants[_applicantId - 1];
         return (applicant.id, applicant.name, applicant.skills, applicant.phoneNumber, applicant.email, applicant.rating, applicant.workPreference);
     }
 
-    // Function to get details of a job
     function getJobDetails(uint256 _jobId) public view returns (uint256, string memory, string memory, uint256, uint256, bool) {
-        require(_jobId <= jobCount, "Invalid job ID");
+        require(_jobId <= allJobs.length, "Invalid job ID");
 
-        Job memory job = jobs[_jobId];
+        Job memory job = allJobs[_jobId - 1];
         return (job.id, job.title, job.description, job.salary, job.applicantId, job.isFilled);
     }
 
-    // Function to get rating of an applicant
     function getApplicantRating(uint256 _applicantId) public view returns (uint256) {
-        require(_applicantId <= applicantCount, "Invalid applicant ID");
+        require(_applicantId <= allApplicants.length, "Invalid applicant ID");
 
-        return applicants[_applicantId].rating;
+        return allApplicants[_applicantId - 1].rating;
     }
 
-    // Function to get all applicants
     function getAllApplicants() public view returns (Applicant[] memory) {
-        Applicant[] memory allApplicants = new Applicant[](applicantCount);
-        for (uint256 i = 1; i <= applicantCount; i++) {
-            allApplicants[i - 1] = applicants[i];
-        }
         return allApplicants;
     }
 
-    // Function to get the work preference of an applicant
     function getApplicantType(uint256 _applicantId) public view returns (WorkPreference) {
-        require(_applicantId <= applicantCount, "Invalid applicant ID");
+        require(_applicantId <= allApplicants.length, "Invalid applicant ID");
 
-        return applicants[_applicantId].workPreference;
+        return allApplicants[_applicantId - 1].workPreference;
     }
 
-    // Function to get all job details
     function getAllJobDetails() public view returns (Job[] memory) {
-        Job[] memory allJobs = new Job[](jobCount);
-        for (uint256 i = 1; i <= jobCount; i++) {
-            allJobs[i - 1] = jobs[i];
-        }
         return allJobs;
     }
 }
